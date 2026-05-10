@@ -1,5 +1,5 @@
-Flask
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
+flask
 google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+gunicorn
