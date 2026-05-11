@@ -13,23 +13,35 @@ SPREADSHEET_ID = '1UnO_VzSQPRgrYzxk4t9lwLG-qsMR_QY9OcrlHW1Oqzc'
 def get_sheets_service():
     creds = None
     
-    # Renderの環境変数からトークン情報を読み込む
-    env_token = os.environ.get('GOOGLE_TOKEN_JSON')
-    if env_token:
-        info = json.loads(env_token)
-        creds = Credentials.from_authorized_user_info(info, SCOPES)
+    # 1. まずはPC上の「token.json」を探す（ローカル環境用）
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     
+    # 2. 「token.json」がない場合、Renderの環境変数を探す（公開環境用）
+    if not creds:
+        env_token = os.environ.get('GOOGLE_TOKEN_JSON')
+        if env_token:
+            info = json.loads(env_token)
+            creds = Credentials.from_authorized_user_info(info, SCOPES)
+    
+    # トークンが期限切れなら更新
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    
+    # それでも認証できない（初回など）場合、credentials情報を取得
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+        # PC上の「credentials.json」を探す
+        if os.path.exists('credentials.json'):
+            from google_auth_oauthlib.flow import InstalledAppFlow
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
         else:
-            # Renderの環境変数から認証情報を読み込む
+            # Renderの環境変数を探す
             env_creds = os.environ.get('GOOGLE_CREDENTIALS_JSON')
             if env_creds:
                 info = json.loads(env_creds)
-                # クライアントIDなどの詳細設定を環境変数から直接構成
-                from google_auth_oauthlib.flow import InstalledAppFlow
-                # 一時的なファイルを作らずに設定を読み込む
                 creds = Credentials.from_authorized_user_info(info, SCOPES)
 
     return build('sheets', 'v4', credentials=creds)
@@ -62,6 +74,5 @@ def add_record():
     return "<h1>Recorded!</h1><a href='/'>Back</a>"
 
 if __name__ == '__main__':
-    # Renderではポート番号を環境変数から取得するのが一般的です
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
